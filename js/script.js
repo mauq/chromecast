@@ -21,7 +21,7 @@ const dbProm = daysRef.get()
   .then((res) => {return res.val();});
 
 //fake api response promise
-const jsonProm = axios.get('https://my-json-server.typicode.com/mauq/db2/db')
+const jsonProm = axios.get('http://api.openweathermap.org/data/2.5/forecast?q=Forks&units=imperial&appid=23bd40f43f1959f801895de830da8f31')
   .then((res) => {return res;});
 
 const aWeekAgo = Date.now() - 604800000;
@@ -29,26 +29,44 @@ const aWeekAgo = Date.now() - 604800000;
 
 //handle both the firebase database request, and the api request
 Promise.all([dbProm, jsonProm]).then((values) => {
+  console.log(values);
   //if the firebase database is empty (null), populate it with api request data
   const currDB = values[0];
-  const currAPI = values[1].data;
+  const currAPI = values[1].data.list;
   if (values[0] === null) {
-    currAPI.days.forEach((i) => {
-      daysRef.child('days/' + i.timestamp).set({"day": i.day, "time": i.timestamp, "condis": i.condis});
+    currAPI.forEach((i) => {
+      daysRef.child('3hrChunks/' + i.dt).set({
+        "day": i.dt_txt,
+        "time": i.dt,
+        "precip": i.pop,
+        "accum": i?.rain?.['3h'] || 0,
+        "descrip": i.weather[0].description,
+        "temp": i.main.temp});
     });
   } else { //update existing firebase database data with new api request data
-
     //truncate data removing anything over 7 days old
-    Object.keys(currDB.days).forEach((i) => {
+    Object.keys(currDB['3hrChunks']).forEach((i) => {
       if (i < aWeekAgo) {
-        daysRef.child("days/" + i).remove();
+        daysRef.child("3hrChunks/" + i).remove();
       }
     });
-    currAPI.days.forEach((i) => { //if date for new api call exists in old db, update
-      if (i.timestamp in currDB.days) {
-        daysRef.child("days/" + i.timestamp).update({"day": i.day, "time": i.timestamp, "condis": i.condis});
+    currAPI.forEach((i) => { //if date for new api call exists in old db, update
+      if (i.dt in currDB['3hrChunks']) {
+        daysRef.child("3hrChunks/" + i.dt).update({
+          "day": i.dt_txt,
+          "time": i.dt,
+          "precip": i.pop,
+          "accum": i?.rain?.['3h'] || 0,
+          "descrip": i.weather[0].description,
+          "temp": i.main.temp});
       } else { //else, add new days
-        daysRef.child('days/' + i.timestamp).set({"day": i.day, "time": i.timestamp, "condis": i.condis});
+        daysRef.child('3hrChunks/' + i.dt).set({
+          "day": i.dt_txt,
+          "time": i.dt,
+          "precip": i.pop,
+          "accum": i?.rain?.['3h'] || 0,
+          "descrip": i.weather[0].description,
+          "temp": i.main.temp});
       }
     });
   }
